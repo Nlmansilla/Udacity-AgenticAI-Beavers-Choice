@@ -9,3 +9,10 @@ dependencies = [
     "pydantic-ai-harness>=0.31.0",
     "pydantic-ai-slim[openai]>=2.43.0",
 ]
+
+[dependency-groups]
+dev = [
+    "autopep8>=2.3.2",
+    "isort>=9.0.1",
+    "pylint>=4.0.8",
+]

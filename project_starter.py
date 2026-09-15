@@ -1,87 +1,134 @@
-import pandas as pd
-import numpy as np
+"""Multi-agent inventory, quoting, and order management exercise."""
+
+import ast
+import json
 import os
 import time
+from collections import Counter
+from datetime import date, datetime, timedelta
+from typing import Dict, List, Literal, Union
+
+import numpy as np
+import pandas as pd
 from dotenv import load_dotenv
-import ast
-from sqlalchemy.sql import text
-from datetime import datetime, timedelta
-from typing import Dict, List, Union
-from sqlalchemy import create_engine, Engine, Connection
+from pydantic import BaseModel, Field
 from pydantic_ai import Agent
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
-from pydantic import BaseModel, Field
-from datetime import date
-from collections import Counter
-from typing import Literal
-import json
+from sqlalchemy import Connection, Engine, create_engine
+from sqlalchemy.sql import text
 
 MARKUP_RATE = 0.25
 
 # Create an SQLite database
 db_engine = create_engine("sqlite:///munder_difflin.db")
 
-# List containing the different kinds of papers 
+# List containing the different kinds of papers
 paper_supplies = [
     # Paper Types (priced per sheet unless specified)
-    {"item_name": "A4 paper",                         "category": "paper",        "unit_price": 0.05, "unit": "sheet"},
-    {"item_name": "Letter-sized paper",              "category": "paper",        "unit_price": 0.06, "unit": "sheet"},
-    {"item_name": "Cardstock",                        "category": "paper",        "unit_price": 0.15, "unit": "sheet"},
-    {"item_name": "Colored paper",                    "category": "paper",        "unit_price": 0.10, "unit": "sheet"},
-    {"item_name": "Glossy paper",                     "category": "paper",        "unit_price": 0.20, "unit": "sheet"},
-    {"item_name": "Matte paper",                      "category": "paper",        "unit_price": 0.18, "unit": "sheet"},
-    {"item_name": "Recycled paper",                   "category": "paper",        "unit_price": 0.08, "unit": "sheet"},
-    {"item_name": "Eco-friendly paper",               "category": "paper",        "unit_price": 0.12, "unit": "sheet"},
-    {"item_name": "Poster paper",                     "category": "paper",        "unit_price": 0.25, "unit": "sheet"},
-    {"item_name": "Banner paper",                     "category": "paper",        "unit_price": 0.30, "unit": "sheet"},
-    {"item_name": "Kraft paper",                      "category": "paper",        "unit_price": 0.10, "unit": "sheet"},
-    {"item_name": "Construction paper",               "category": "paper",        "unit_price": 0.07, "unit": "sheet"},
-    {"item_name": "Wrapping paper",                   "category": "paper",        "unit_price": 0.15, "unit": "sheet"},
-    {"item_name": "Glitter paper",                    "category": "paper",        "unit_price": 0.22, "unit": "sheet"},
-    {"item_name": "Decorative paper",                 "category": "paper",        "unit_price": 0.18, "unit": "sheet"},
-    {"item_name": "Letterhead paper",                 "category": "paper",        "unit_price": 0.12, "unit": "sheet"},
-    {"item_name": "Legal-size paper",                 "category": "paper",        "unit_price": 0.08, "unit": "sheet"},
-    {"item_name": "Crepe paper",                      "category": "paper",        "unit_price": 0.05, "unit": "sheet"},
-    {"item_name": "Photo paper",                      "category": "paper",        "unit_price": 0.25, "unit": "sheet"},
-    {"item_name": "Uncoated paper",                   "category": "paper",        "unit_price": 0.06, "unit": "sheet"},
-    {"item_name": "Butcher paper",                    "category": "paper",        "unit_price": 0.10, "unit": "sheet"},
-    {"item_name": "Heavyweight paper",                "category": "paper",        "unit_price": 0.20, "unit": "sheet"},
-    {"item_name": "Standard copy paper",              "category": "paper",        "unit_price": 0.04, "unit": "sheet"},
-    {"item_name": "Bright-colored paper",             "category": "paper",        "unit_price": 0.12, "unit": "sheet"},
-    {"item_name": "Patterned paper",                  "category": "paper",        "unit_price": 0.15, "unit": "sheet"},
+    {"item_name": "A4 paper", "category": "paper", "unit_price": 0.05, "unit": "sheet"},
+    {"item_name": "Letter-sized paper", "category": "paper", "unit_price": 0.06, "unit": "sheet"},
+    {"item_name": "Cardstock", "category": "paper", "unit_price": 0.15, "unit": "sheet"},
+    {"item_name": "Colored paper", "category": "paper", "unit_price": 0.10, "unit": "sheet"},
+    {"item_name": "Glossy paper", "category": "paper", "unit_price": 0.20, "unit": "sheet"},
+    {"item_name": "Matte paper", "category": "paper", "unit_price": 0.18, "unit": "sheet"},
+    {"item_name": "Recycled paper", "category": "paper", "unit_price": 0.08, "unit": "sheet"},
+    {"item_name": "Eco-friendly paper", "category": "paper", "unit_price": 0.12, "unit": "sheet"},
+    {"item_name": "Poster paper", "category": "paper", "unit_price": 0.25, "unit": "sheet"},
+    {"item_name": "Banner paper", "category": "paper", "unit_price": 0.30, "unit": "sheet"},
+    {"item_name": "Kraft paper", "category": "paper", "unit_price": 0.10, "unit": "sheet"},
+    {"item_name": "Construction paper", "category": "paper", "unit_price": 0.07, "unit": "sheet"},
+    {"item_name": "Wrapping paper", "category": "paper", "unit_price": 0.15, "unit": "sheet"},
+    {"item_name": "Glitter paper", "category": "paper", "unit_price": 0.22, "unit": "sheet"},
+    {"item_name": "Decorative paper", "category": "paper", "unit_price": 0.18, "unit": "sheet"},
+    {"item_name": "Letterhead paper", "category": "paper", "unit_price": 0.12, "unit": "sheet"},
+    {"item_name": "Legal-size paper", "category": "paper", "unit_price": 0.08, "unit": "sheet"},
+    {"item_name": "Crepe paper", "category": "paper", "unit_price": 0.05, "unit": "sheet"},
+    {"item_name": "Photo paper", "category": "paper", "unit_price": 0.25, "unit": "sheet"},
+    {"item_name": "Uncoated paper", "category": "paper", "unit_price": 0.06, "unit": "sheet"},
+    {"item_name": "Butcher paper", "category": "paper", "unit_price": 0.10, "unit": "sheet"},
+    {"item_name": "Heavyweight paper", "category": "paper", "unit_price": 0.20, "unit": "sheet"},
+    {"item_name": "Standard copy paper", "category": "paper", "unit_price": 0.04, "unit": "sheet"},
+    {"item_name": "Bright-colored paper", "category": "paper", "unit_price": 0.12, "unit": "sheet"},
+    {"item_name": "Patterned paper", "category": "paper", "unit_price": 0.15, "unit": "sheet"},
 
     # Product Types (priced per unit)
-    {"item_name": "Paper plates",                     "category": "product",      "unit_price": 0.10, "unit": "plate"},  # per plate
-    {"item_name": "Paper cups",                       "category": "product",      "unit_price": 0.08, "unit": "cup"},  # per cup
-    {"item_name": "Paper napkins",                    "category": "product",      "unit_price": 0.02, "unit": "napkin"},  # per napkin
-    {"item_name": "Disposable cups",                  "category": "product",      "unit_price": 0.10, "unit": "cup"},  # per cup
-    {"item_name": "Table covers",                     "category": "product",      "unit_price": 1.50, "unit": "cover"},  # per cover
-    {"item_name": "Envelopes",                        "category": "product",      "unit_price": 0.05, "unit": "envelope"},  # per envelope
-    {"item_name": "Sticky notes",                     "category": "product",      "unit_price": 0.03, "unit": "sheet"},  # per sheet
-    {"item_name": "Notepads",                         "category": "product",      "unit_price": 2.00, "unit": "pad"},  # per pad
-    {"item_name": "Invitation cards",                 "category": "product",      "unit_price": 0.50, "unit": "card"},  # per card
-    {"item_name": "Flyers",                           "category": "product",      "unit_price": 0.15, "unit": "flyer"},  # per flyer
-    {"item_name": "Party streamers",                  "category": "product",      "unit_price": 0.05, "unit": "roll"},  # per roll
-    {"item_name": "Decorative adhesive tape (washi tape)", "category": "product", "unit_price": 0.20, "unit": "roll"},  # per roll
-    {"item_name": "Paper party bags",                 "category": "product",      "unit_price": 0.25, "unit": "bag"},  # per bag
-    {"item_name": "Name tags with lanyards",          "category": "product",      "unit_price": 0.75, "unit": "tag"},  # per tag
-    {"item_name": "Presentation folders",             "category": "product",      "unit_price": 0.50, "unit": "folder"},  # per folder
+    {"item_name": "Paper plates", "category": "product",
+        "unit_price": 0.10, "unit": "plate"},  # per plate
+    {"item_name": "Paper cups", "category": "product",
+     "unit_price": 0.08, "unit": "cup"},  # per cup
+    {"item_name": "Paper napkins", "category": "product",
+        "unit_price": 0.02, "unit": "napkin"},  # per napkin
+    {"item_name": "Disposable cups", "category": "product",
+        "unit_price": 0.10, "unit": "cup"},  # per cup
+    {"item_name": "Table covers", "category": "product",
+        "unit_price": 1.50, "unit": "cover"},  # per cover
+    {"item_name": "Envelopes",
+     "category": "product",
+     "unit_price": 0.05,
+     "unit": "envelope"},
+    # per envelope
+    {"item_name": "Sticky notes", "category": "product",
+        "unit_price": 0.03, "unit": "sheet"},  # per sheet
+    {"item_name": "Notepads", "category": "product", "unit_price": 2.00, "unit": "pad"},  # per pad
+    {"item_name": "Invitation cards", "category": "product",
+        "unit_price": 0.50, "unit": "card"},  # per card
+    {"item_name": "Flyers", "category": "product",
+     "unit_price": 0.15, "unit": "flyer"},  # per flyer
+    {"item_name": "Party streamers", "category": "product",
+        "unit_price": 0.05, "unit": "roll"},  # per roll
+    {"item_name": "Decorative adhesive tape (washi tape)",
+     "category": "product",
+     "unit_price": 0.20,
+     "unit": "roll"},
+    # per roll
+    {"item_name": "Paper party bags", "category": "product",
+        "unit_price": 0.25, "unit": "bag"},  # per bag
+    {"item_name": "Name tags with lanyards", "category": "product",
+        "unit_price": 0.75, "unit": "tag"},  # per tag
+    {"item_name": "Presentation folders", "category": "product",
+        "unit_price": 0.50, "unit": "folder"},  # per folder
 
     # Large-format items (priced per unit)
-    {"item_name": "Large poster paper (24x36 inches)", "category": "large_format", "unit_price": 1.00, "unit": "sheet"},  # Sales unit inferred from the product name.
-    {"item_name": "Rolls of banner paper (36-inch width)", "category": "large_format", "unit_price": 2.50, "unit": "roll"},  # Sales unit inferred from the product name.
+    {"item_name": "Large poster paper (24x36 inches)",
+     "category": "large_format",
+     "unit_price": 1.00,
+     "unit": "sheet"},
+    # Sales unit inferred from the product name.
+    {"item_name": "Rolls of banner paper (36-inch width)",
+     "category": "large_format",
+     "unit_price": 2.50,
+     "unit": "roll"},
+    # Sales unit inferred from the product name.
 
     # Specialty papers
-    {"item_name": "100 lb cover stock",               "category": "specialty",    "unit_price": 0.50, "unit": None},  # Sales unit requires confirmation.
-    {"item_name": "80 lb text paper",                 "category": "specialty",    "unit_price": 0.40, "unit": None},  # Sales unit requires confirmation.
-    {"item_name": "250 gsm cardstock",                "category": "specialty",    "unit_price": 0.30, "unit": None},  # Sales unit requires confirmation.
-    {"item_name": "220 gsm poster paper",             "category": "specialty",    "unit_price": 0.35, "unit": None},  # Sales unit requires confirmation.
+    {"item_name": "100 lb cover stock",
+     "category": "specialty",
+     "unit_price": 0.50,
+     "unit": None},
+    # Sales unit requires confirmation.
+    {"item_name": "80 lb text paper",
+     "category": "specialty",
+     "unit_price": 0.40,
+     "unit": None},
+    # Sales unit requires confirmation.
+    {"item_name": "250 gsm cardstock",
+     "category": "specialty",
+     "unit_price": 0.30,
+     "unit": None},
+    # Sales unit requires confirmation.
+    {"item_name": "220 gsm poster paper",
+     "category": "specialty",
+     "unit_price": 0.35,
+     "unit": None},
+    # Sales unit requires confirmation.
 ]
 
 # Given below are some utility functions you can use to implement your multi-agent system
 
-def generate_sample_inventory(paper_supplies: list, coverage: float = 0.4, seed: int = 137) -> pd.DataFrame:
+
+def generate_sample_inventory(paper_supplies: list, coverage: float = 0.4,
+                              seed: int = 137) -> pd.DataFrame:
     """
     Generate inventory for exactly a specified percentage of items from the full paper supply list.
 
@@ -95,7 +142,8 @@ def generate_sample_inventory(paper_supplies: list, coverage: float = 0.4, seed:
     Args:
         paper_supplies (list): A list of dictionaries, each representing a paper item with
                                keys 'item_name', 'category', and 'unit_price'.
-        coverage (float, optional): Fraction of items to include in the inventory (default is 0.4, or 40%).
+        coverage (float, optional): Fraction of items included in inventory
+            (default is 0.4, or 40%).
         seed (int, optional): Random seed for reproducibility (default is 137).
 
     Returns:
@@ -136,7 +184,8 @@ def generate_sample_inventory(paper_supplies: list, coverage: float = 0.4, seed:
     # Return inventory as a pandas DataFrame
     return pd.DataFrame(inventory)
 
-def init_database(db_engine: Engine, seed: int = 137) -> Engine:    
+
+def init_database(db_engine: Engine, seed: int = 137) -> Engine:
     """
     Set up the Munder Difflin database with all required tables and initial records.
 
@@ -149,7 +198,8 @@ def init_database(db_engine: Engine, seed: int = 137) -> Engine:
 
     Args:
         db_engine (Engine): A SQLAlchemy engine connected to the SQLite database.
-        seed (int, optional): A random seed used to control reproducibility of inventory stock levels.
+        seed (int, optional): Random seed used to control reproducibility of
+            inventory stock levels.
                               Default is 137.
 
     Returns:
@@ -206,7 +256,7 @@ def init_database(db_engine: Engine, seed: int = 137) -> Engine:
                     FOREIGN KEY (order_id) REFERENCES orders(order_id)
                 )
             """))
-        
+
         # ----------------------------
         # 2. Load and initialize 'quote_requests' table
         # ----------------------------
@@ -226,9 +276,12 @@ def init_database(db_engine: Engine, seed: int = 137) -> Engine:
             quotes_df["request_metadata"] = quotes_df["request_metadata"].apply(
                 lambda x: ast.literal_eval(x) if isinstance(x, str) else x
             )
-            quotes_df["job_type"] = quotes_df["request_metadata"].apply(lambda x: x.get("job_type", ""))
-            quotes_df["order_size"] = quotes_df["request_metadata"].apply(lambda x: x.get("order_size", ""))
-            quotes_df["event_type"] = quotes_df["request_metadata"].apply(lambda x: x.get("event_type", ""))
+            quotes_df["job_type"] = quotes_df["request_metadata"].apply(
+                lambda x: x.get("job_type", ""))
+            quotes_df["order_size"] = quotes_df["request_metadata"].apply(
+                lambda x: x.get("order_size", ""))
+            quotes_df["event_type"] = quotes_df["request_metadata"].apply(
+                lambda x: x.get("event_type", ""))
 
         # Retain only relevant columns
         quotes_df = quotes_df[[
@@ -270,7 +323,8 @@ def init_database(db_engine: Engine, seed: int = 137) -> Engine:
             })
 
         # Commit transactions to database
-        pd.DataFrame(initial_transactions).to_sql("transactions", db_engine, if_exists="append", index=False)
+        pd.DataFrame(initial_transactions).to_sql(
+            "transactions", db_engine, if_exists="append", index=False)
 
         # Save the inventory reference table
         inventory_df.to_sql("inventory", db_engine, if_exists="replace", index=False)
@@ -281,6 +335,7 @@ def init_database(db_engine: Engine, seed: int = 137) -> Engine:
         print(f"Error initializing database: {e}")
         raise
 
+
 def create_transaction(
     item_name: str,
     transaction_type: str,
@@ -290,8 +345,8 @@ def create_transaction(
     connection: Connection
 ) -> int:
     """
-    This function records a transaction of type 'stock_orders' or 'sales' with a specified
-    item name, quantity, total price, and transaction date into the 'transactions' table of the database.
+    Record a stock order or sale with its item, quantity, price, and date in
+    the transactions table.
 
     Args:
         item_name (str): The name of the item involved in the transaction.
@@ -343,11 +398,12 @@ def create_transaction(
         print(f"Error creating transaction: {e}")
         raise
 
+
 def get_all_inventory(as_of_date: str) -> Dict[str, int]:
     """
     Retrieve a snapshot of available inventory as of a specific date.
 
-    This function calculates the net quantity of each item by summing 
+    This function calculates the net quantity of each item by summing
     all stock orders and subtracting all sales up to and including the given date.
 
     Only items with positive stock are included in the result.
@@ -380,11 +436,12 @@ def get_all_inventory(as_of_date: str) -> Dict[str, int]:
     # Convert the result into a dictionary {item_name: stock}
     return dict(zip(result["item_name"], result["stock"]))
 
+
 def get_stock_level(item_name: str, as_of_date: Union[str, datetime]) -> pd.DataFrame:
     """
     Retrieve the stock level of a specific item as of a given date.
 
-    This function calculates the net stock by summing all 'stock_orders' and 
+    This function calculates the net stock by summing all 'stock_orders' and
     subtracting all 'sales' transactions for the specified item up to the given date.
 
     Args:
@@ -419,6 +476,7 @@ def get_stock_level(item_name: str, as_of_date: Union[str, datetime]) -> pd.Data
         params={"item_name": item_name, "as_of_date": as_of_date},
     )
 
+
 def get_supplier_delivery_date(input_date_str: str, quantity: int) -> str:
     """
     Estimate the supplier delivery date based on the requested order quantity and a starting date.
@@ -437,14 +495,20 @@ def get_supplier_delivery_date(input_date_str: str, quantity: int) -> str:
         str: Estimated delivery date in ISO format (YYYY-MM-DD).
     """
     # Debug log (comment out in production if needed)
-    print(f"FUNC (get_supplier_delivery_date): Calculating for qty {quantity} from date string '{input_date_str}'")
+    print(
+        "FUNC (get_supplier_delivery_date): Calculating for qty "
+        f"{quantity} from date string '{input_date_str}'"
+    )
 
     # Attempt to parse the input date
     try:
         input_date_dt = datetime.fromisoformat(input_date_str.split("T")[0])
     except (ValueError, TypeError):
         # Fallback to current date on format error
-        print(f"WARN (get_supplier_delivery_date): Invalid date format '{input_date_str}', using today as base.")
+        print(
+            "WARN (get_supplier_delivery_date): Invalid date format "
+            f"'{input_date_str}', using today as base."
+        )
         input_date_dt = datetime.now()
 
     # Determine delivery delay based on quantity
@@ -463,6 +527,7 @@ def get_supplier_delivery_date(input_date_str: str, quantity: int) -> str:
     # Return formatted delivery date
     return delivery_date_dt.strftime("%Y-%m-%d")
 
+
 def get_cash_balance(as_of_date: Union[str, datetime]) -> float:
     """
     Calculate the current cash balance as of a specified date.
@@ -471,10 +536,12 @@ def get_cash_balance(as_of_date: Union[str, datetime]) -> float:
     from total revenue ('sales') recorded in the transactions table up to the given date.
 
     Args:
-        as_of_date (str or datetime): The cutoff date (inclusive) in ISO format or as a datetime object.
+        as_of_date (str or datetime): Inclusive cutoff date in ISO format or
+            as a datetime object.
 
     Returns:
-        float: Net cash balance as of the given date. Returns 0.0 if no transactions exist or an error occurs.
+        float: Net cash balance as of the given date, or 0.0 if no transactions
+            exist or an error occurs.
     """
     try:
         # Convert date to ISO format if it's a datetime object
@@ -490,8 +557,10 @@ def get_cash_balance(as_of_date: Union[str, datetime]) -> float:
 
         # Compute the difference between sales and stock purchases
         if not transactions.empty:
-            total_sales = transactions.loc[transactions["transaction_type"] == "sales", "price"].sum()
-            total_purchases = transactions.loc[transactions["transaction_type"] == "stock_orders", "price"].sum()
+            total_sales = transactions.loc[transactions["transaction_type"]
+                                           == "sales", "price"].sum()
+            total_purchases = transactions.loc[transactions["transaction_type"]
+                                               == "stock_orders", "price"].sum()
             return float(total_sales - total_purchases)
 
         return 0.0
@@ -653,7 +722,9 @@ model = OpenAIChatModel(
     ),
 )
 
-### INVENTORY RELATED ### 
+### INVENTORY RELATED ###
+
+
 def get_reserved_cash(as_of_date: str) -> float:
     """Return cash reserved for pending replenishments on the given date."""
     query = text("""
@@ -707,13 +778,18 @@ def get_reserved_stock(item_name: str, as_of_date: str) -> int:
 
     return int(reserved_stock)
 
+
 class InventoryAssessment(BaseModel):
+    """Summarize available inventory and whether its delivery meets a deadline."""
+
     current_stock: int = Field(ge=0)
     missing_quantity: int = Field(ge=0)
     supplier_delivery_date: date | None = None
     can_meet_deadline: bool
-    
+
 # Tools for inventory agent
+
+
 def assess_inventory(
     item_name: str,
     requested_quantity: int,
@@ -721,8 +797,8 @@ def assess_inventory(
     delivery_due_date: str,
 ) -> InventoryAssessment:
     """
-    Evaluates availability for a specific product at an specific due date    
-    
+    Evaluates availability for a specific product at an specific due date
+
     Args:
     item_name: Product name. Must match the name in the inventory.
     requested_quantity: Requested amount. Must be an integer greater than zero.
@@ -754,22 +830,23 @@ def assess_inventory(
 
     missing_quantity = max(0, requested_quantity - current_stock)
     supplier_delivery_date = None
-    
+
     available_date = date.fromisoformat(request_date)
-    
+
     if missing_quantity > 0:
         supplier_delivery_date = get_supplier_delivery_date(request_date, missing_quantity)
         available_date = date.fromisoformat(supplier_delivery_date)
-    
+
     can_meet_deadline = available_date <= date.fromisoformat(delivery_due_date)
-    
+
     return InventoryAssessment(
         current_stock=current_stock,
         missing_quantity=missing_quantity,
         supplier_delivery_date=supplier_delivery_date,
         can_meet_deadline=can_meet_deadline
     )
-    
+
+
 def list_available_inventory(as_of_date: str) -> Dict[str, int]:
     """Return positive stock available after subtracting active reservations."""
     physical_inventory = get_all_inventory(as_of_date)
@@ -789,6 +866,7 @@ def list_available_inventory(as_of_date: str) -> Dict[str, int]:
 
     return available_inventory
 
+
 inventory_agent = Agent(
     model=model,
     tools=[assess_inventory, list_available_inventory],
@@ -800,24 +878,33 @@ inventory_agent = Agent(
         "a replenishment order; never imply an order has already been placed."
     )
 )
-### END INVENTORY RELATED ### 
+### END INVENTORY RELATED ###
 
 
-### QUOTE RELATED ### 
+### QUOTE RELATED ###
 class CatalogMatch(BaseModel):
+    """Represent the catalog resolution for one requested product."""
+
     source_index: int = Field(ge=0)
     catalog_item_name: str | None = None
     status: Literal["matched", "needs_clarification", "unsupported"]
     reason: str
-    
+
+
 class QuoteItemRequest(BaseModel):
+    """Represent a catalog item and its requested quantity."""
+
     item_name: str
     quantity: int = Field(gt=0)
 
+
 class RequestedItem(BaseModel):
+    """Preserve the customer's product description, amount, and unit."""
+
     original_description: str
     quantity: int = Field(gt=0)
     unit: str
+
 
 def validate_match_coverage(
     items: List[RequestedItem],
@@ -842,6 +929,7 @@ def validate_match_coverage(
                 raise ValueError(
                     f"Invalid catalog product: {match.catalog_item_name}"
                 )
+
 
 def units_match(requested_unit: str, catalog_unit: str | None) -> bool:
     """Accept singular/plural spellings, never package conversions."""
@@ -942,17 +1030,23 @@ def build_order_items(
         for match in sorted(matches, key=lambda match: match.source_index)
     ]
 
+
 class QuoteLine(BaseModel):
+    """Represent one priced line in a quote."""
+
     item_name: str
     quantity: int
     selling_unit_price: float
     line_total: float
     discount_rate: float
-    
+
+
 class QuoteAssessment(BaseModel):
+    """Represent the priced items and total for a quote."""
+
     items: List[QuoteLine]
     total_amount: float
-    
+
 
 def calculate_quote(items: List[QuoteItemRequest]) -> QuoteAssessment:
     """Calculate a quote using a 25% markup on acquisition costs."""
@@ -960,46 +1054,47 @@ def calculate_quote(items: List[QuoteItemRequest]) -> QuoteAssessment:
         product["item_name"]: product["unit_price"]
         for product in paper_supplies
     }
-    
+
     if not items:
         raise ValueError("At least one item is required.")
-    
+
     quote_lines = []
-    
+
     items = consolidate_items(items)
-    
+
     for item in items:
         if item.item_name not in catalog:
             raise ValueError(f"Unknown product: {item.item_name}")
         unit_cost = catalog[item.item_name]
         selling_unit_price = float(unit_cost + unit_cost * MARKUP_RATE)
         discount_rate = get_bulk_discount(item.quantity)
-        line_total =  round(item.quantity * selling_unit_price * (1 - discount_rate), 2)
+        line_total = round(item.quantity * selling_unit_price * (1 - discount_rate), 2)
         quote_line = QuoteLine(
-                        item_name=item.item_name,
-                        quantity=item.quantity,
-                        selling_unit_price=selling_unit_price,
-                        line_total=line_total,
-                        discount_rate=discount_rate
-                    )
+            item_name=item.item_name,
+            quantity=item.quantity,
+            selling_unit_price=selling_unit_price,
+            line_total=line_total,
+            discount_rate=discount_rate
+        )
         quote_lines.append(quote_line)
-        
+
     return QuoteAssessment(
         items=quote_lines,
         total_amount=round(
-            sum(line.line_total for line in quote_lines),2
+            sum(line.line_total for line in quote_lines), 2
         )
     )
-    
+
+
 def get_bulk_discount(quantity: int) -> float:
     """Return the discount rate based on the quantity of one product"""
     if quantity >= 1000:
         return 0.10
-    elif quantity >= 500:
+    if quantity >= 500:
         return 0.05
-    else:
-        return 0
-    
+    return 0
+
+
 quote_agent = Agent(
     model=model,
     tools=[calculate_quote, search_quote_history],
@@ -1019,19 +1114,23 @@ quote_agent = Agent(
     )
 )
 
-### END QUOTE RELATED ### 
+### END QUOTE RELATED ###
 
-### ORDER RELATED ### 
+### ORDER RELATED ###
+
 
 class OrderAssessment(BaseModel):
+    """Report whether an order is feasible and its funding requirements."""
+
     can_fulfill: bool
     reason: str
     replenishment_cost: float = Field(ge=0)
     cash_balance: float
- 
+
+
 def consolidate_items(
-        items: List[QuoteItemRequest]
-    ) -> List[QuoteItemRequest]:
+    items: List[QuoteItemRequest]
+) -> List[QuoteItemRequest]:
     """Combine quantities for repeated product names."""
     quantities = Counter()
 
@@ -1042,31 +1141,36 @@ def consolidate_items(
         QuoteItemRequest(item_name=name, quantity=quantity)
         for name, quantity in quantities.items()
     ]
-    
+
+
 def assess_order(
-        items: List[QuoteItemRequest],
-    request_date: str,
-    delivery_due_date: str
-    ) -> OrderAssessment:
+    items: List[QuoteItemRequest],
+        request_date: str,
+        delivery_due_date: str
+) -> OrderAssessment:
     """Check delivery feasibility and replenishment funding for an order."""
-    
+
     if not items:
-            raise ValueError("At least one item is required.")
-        
+        raise ValueError("At least one item is required.")
+
     items = consolidate_items(items)
-    
+
     items_assessments = []
     for item in items:
-        item_assessment = assess_inventory(item.item_name, item.quantity, request_date, delivery_due_date)
+        item_assessment = assess_inventory(
+            item.item_name,
+            item.quantity,
+            request_date,
+            delivery_due_date)
         items_assessments.append((item, item_assessment))
-    
+
     cash_balance = get_cash_balance(request_date)
     reserved_cash = get_reserved_cash(request_date)
     available_cash = cash_balance - reserved_cash
-    
+
     catalog = {
-    product["item_name"]: product["unit_price"]
-    for product in paper_supplies
+        product["item_name"]: product["unit_price"]
+        for product in paper_supplies
     }
 
     replenishment_cost = 0.0
@@ -1079,12 +1183,12 @@ def assess_order(
 
         unit_cost = catalog[item.item_name]
         replenishment_cost += assessment.missing_quantity * unit_cost
-        
+
         if not assessment.can_meet_deadline:
             deadline_failures.append((item.item_name, assessment.supplier_delivery_date))
 
     replenishment_cost = round(replenishment_cost, 2)
-    
+
     if deadline_failures:
         details = "; ".join(
             f"{name}: estimated supplier arrival {arrival}"
@@ -1099,7 +1203,7 @@ def assess_order(
             replenishment_cost=replenishment_cost,
             cash_balance=cash_balance,
         )
-    
+
     # check balance
     if replenishment_cost > available_cash:
         return OrderAssessment(
@@ -1112,28 +1216,35 @@ def assess_order(
             replenishment_cost=replenishment_cost,
             cash_balance=cash_balance,
         )
-    
+
     return OrderAssessment(
-    can_fulfill=True,
-    reason=(
-        "The order meets inventory availability and funding requirements. "
-        "No purchases or sales have been recorded."
-    ),
-    replenishment_cost=replenishment_cost,
-    cash_balance=cash_balance,
+        can_fulfill=True,
+        reason=(
+            "The order meets inventory availability and funding requirements. "
+            "No purchases or sales have been recorded."
+        ),
+        replenishment_cost=replenishment_cost,
+        cash_balance=cash_balance,
     )
 
+
 class OrderResult(BaseModel):
-    status: Literal["fulfilled", "pending","rejected", "requires_replenishment"]
+    """Represent the final status and amount of an order."""
+
+    status: Literal["fulfilled", "pending", "rejected", "requires_replenishment"]
     reason: str
     total_amount: float = Field(ge=0)
-    
+
+
 class ReservationLine(BaseModel):
+    """Describe inventory and cash reserved for one order line."""
+
     item_name: str
     reserved_quantity: int = Field(ge=0)
     incoming_quantity: int = Field(ge=0)
     reserved_cash: float = Field(ge=0)
-    supplier_delivery_date: date | None = None    
+    supplier_delivery_date: date | None = None
+
 
 def fulfill_order(
     order_id: str,
@@ -1144,10 +1255,10 @@ def fulfill_order(
     """Fulfill an order from available stock after validating its feasibility."""
     if not order_id or not order_id.strip():
         raise ValueError("Order ID is required.")
-    
+
     if not items:
         raise ValueError("At least one item is required.")
-    
+
     items = consolidate_items(items)
 
     request_payload = json.dumps(
@@ -1161,7 +1272,7 @@ def fulfill_order(
         },
         sort_keys=True,
     )
-    
+
     with db_engine.connect() as connection:
         existing_order = connection.execute(
             text("""
@@ -1181,9 +1292,9 @@ def fulfill_order(
         return OrderResult.model_validate_json(
             existing_order["result_payload"]
         )
-    
+
     assessment = assess_order(items, request_date, delivery_due_date)
-    
+
     if not assessment.can_fulfill:
         return OrderResult(
             status="rejected",
@@ -1223,7 +1334,7 @@ def fulfill_order(
                     ),
                 )
             )
-        
+
         result = OrderResult(
             status="pending",
             reason=(
@@ -1273,7 +1384,7 @@ def fulfill_order(
                 )
 
         return result
-        
+
     quote = calculate_quote(items)
 
     result = OrderResult(
@@ -1307,6 +1418,7 @@ def fulfill_order(
         )
 
     return result
+
 
 def process_pending_orders(as_of_date: str) -> List[OrderResult]:
     """Receive due replenishments and fulfill ready pending orders."""
@@ -1353,7 +1465,7 @@ def process_pending_orders(as_of_date: str) -> List[OrderResult]:
                     "item_name": reservation["item_name"],
                 },
             )
-            
+
         ready_orders = connection.execute(
             text("""
                 SELECT
@@ -1383,7 +1495,7 @@ def process_pending_orders(as_of_date: str) -> List[OrderResult]:
             """),
             {"as_of_date": cutoff_date},
         ).mappings().all()
-        
+
         for ready_order in ready_orders:
             order_id = ready_order["order_id"]
             fulfillment_date = ready_order["fulfillment_date"]
@@ -1449,8 +1561,10 @@ def process_pending_orders(as_of_date: str) -> List[OrderResult]:
             )
 
             completed_orders.append(result)
-        
+
     return completed_orders
+
+
 sales_agent = Agent(
     model=model,
     tools=[assess_order, fulfill_order],
@@ -1492,7 +1606,11 @@ reporting_agent = Agent(
 ### END REPORTING RELATED ###
 
 ### ORCHESTRATION ###
+
+
 class ParsedCustomerRequest(BaseModel):
+    """Represent an interpreted customer request before adding runtime fields."""
+
     intent: Literal["inventory", "quote", "purchase", "report"]
     items: List[RequestedItem] = Field(default_factory=list)
     delivery_due_date: date | None = None
@@ -1500,8 +1618,11 @@ class ParsedCustomerRequest(BaseModel):
 
 
 class CustomerRequest(ParsedCustomerRequest):
+    """Add request date and order identifier to an interpreted request."""
+
     request_date: date
     order_id: str | None = None
+
 
 def dispatch_request(
     request: CustomerRequest,
@@ -1523,7 +1644,6 @@ def dispatch_request(
     specialist_payload["items"] = [item.model_dump() for item in order_items]
     specialist_message = json.dumps(specialist_payload)
 
-
     if request.intent == "quote":
         if not request.items:
             return "Which products and quantities would you like quoted?"
@@ -1534,7 +1654,7 @@ def dispatch_request(
     if request.intent == "inventory":
         result = inventory_agent.run_sync(specialist_message)
         return result.output
-    
+
     if request.intent == "purchase":
         if not request.items:
             return "Which products and quantities would you like to order?"
@@ -1555,6 +1675,7 @@ def dispatch_request(
         return result.output
 
     return "This request type is not yet supported by the dispatcher."
+
 
 orchestrator_agent = Agent(
     model=model,
@@ -1591,7 +1712,8 @@ orchestrator_agent = Agent(
 # Run your test scenarios by writing them here. Make sure to keep track of them.
 
 def run_test_scenarios():
-    
+    """Run the supplied customer requests through the multi-agent system."""
+
     print("Initializing Database...")
     init_database(db_engine)
     try:
@@ -1615,7 +1737,7 @@ def run_test_scenarios():
     for idx, row in quote_requests_sample.iterrows():
         request_date = row["request_date"].strftime("%Y-%m-%d")
 
-        print(f"\n=== Request {idx+1} ===")
+        print(f"\n=== Request {idx + 1} ===")
         print(f"Context: {row['job']} organizing {row['event']}")
         print(f"Request Date: {request_date}")
         print(f"Cash Balance: ${current_cash:.2f}")
@@ -1635,7 +1757,6 @@ def run_test_scenarios():
         current_cash = report["cash_balance"]
         current_inventory = report["inventory_value"]
 
-        
         parsed_result = orchestrator_agent.run_sync(request_with_date)
         request = CustomerRequest(
             **parsed_result.output.model_dump(),
@@ -1649,8 +1770,10 @@ def run_test_scenarios():
                 catalog_matches = resolve_catalog_items(request.items)
             response = dispatch_request(request, matches=catalog_matches)
         except ValueError as error:
-            response = f"Catalog resolution could not be validated: {error} No order has been placed."
-
+            response = (
+                f"Catalog resolution could not be validated: {error} "
+                "No order has been placed."
+            )
 
         # Update state
         report = generate_financial_report(request_date)
