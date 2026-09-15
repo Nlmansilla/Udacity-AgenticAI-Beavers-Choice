@@ -6,6 +6,8 @@ This project implements a text-based workflow for inventory questions, quote req
 
 The system has five agents total: one orchestrator and four specialist workers. The orchestrator extracts intent, products, quantities, units, and deadlines into a `ParsedCustomerRequest`. It then runs a catalog-matching pass using the same agent with temporary instructions and structured `CatalogMatch` output. Python validates match coverage and product names, checks catalog sales units, and routes the normalized request through `dispatch_request`.
 
+This architecture keeps the language model on tasks that need language understanding, such as intent extraction and semantic catalog matching. Deterministic Python checks enforce complete item coverage, catalog names, units, pricing, inventory, deadlines, and funding before database writes. The explicit Python dispatcher keeps routing and authorization rules visible, while each worker owns one business area. The design stays within the five-agent limit and avoids letting the orchestrator perform transactions directly.
+
 The specialist agents are:
 
 - **Inventory Agent:** evaluates a requested product and lists available inventory. Available stock accounts for active reservations. Supplier dates are estimates based on `get_supplier_delivery_date`.
@@ -15,7 +17,7 @@ The specialist agents are:
 
 `process_pending_orders(as_of_date)` runs from the scenario harness before each customer request. It records due supplier receipts, then records the sale and releases reservations when all lines are available. Replenishment receipts, sales, reservation updates, and order-result changes use a database transaction.
 
-The workflow diagrams currently in the workspace are [`diagrams/diagram.png`](diagrams/diagram.png) and [`diagrams/workflow.png`](diagrams/workflow.png).
+The architecture diagram is [`diagrams/diagram.png`](diagrams/diagram.png), with editable sources in [`diagrams/diagram.drawio`](diagrams/diagram.drawio) and [`diagrams/diagram.svg`](diagrams/diagram.svg). [`diagrams/workflow.png`](diagrams/workflow.png) is the earlier workflow sketch.
 
 ## Data and business rules
 
@@ -29,23 +31,26 @@ The workflow diagrams currently in the workspace are [`diagrams/diagram.png`](di
 
 ## Evaluation
 
-The supplied scenario file has 20 customer requests. Evaluation must use both `test_results.csv` and the console log because a request can initially be pending and later become fulfilled as simulated dates advance. The final order table is the source of truth for completed orders.
+The evaluation uses the 20 requests in `quote_requests_sample.csv` and appends three standalone quote cases. The current `test_results.csv` contains all 23 results from one run. The three quote cases exercise ordinary catalog items at quantities below, at, and above the bulk-discount thresholds:
 
-Two full evaluation snapshots were observed while developing the catalog resolver:
+| Quote case | Requested item | Result | Discount |
+|---|---|---:|---:|
+| `quote-1` | 100 sheets of A4 paper | $6.25 | 0% |
+| `quote-2` | 600 sheets of Cardstock | $106.88 | 5% |
+| `quote-3` | 1,200 sheets of Letter-sized paper | $81.00 | 10% |
 
-| Resolver iteration | Completed | Pending at end | Rejected | Clarification / no order | Interpretation |
-|---|---:|---:|---:|---:|---|
-| Earlier permissive resolver | 10 | 1 | 6 | 3 | Met the numeric threshold, but some extracted lines were silently omitted or mapped to the wrong catalog item (including balloons/tickets and package units). These results are not evidence of correct fulfillment. |
-| Exact-name resolver | 0 | 0 | 0 | 20 | Prevented unsafe substitutions, but was too strict for ordinary synonyms and descriptive wording. It did not meet the three-order completion requirement. |
+All three were parsed as quote requests, matched to the expected catalog products, and recorded with `final_status=quoted`. Their deterministic `quote_assessment` values match the customer-facing breakdowns. Each has a zero `final_sale_amount`, and the cash and inventory balances are unchanged across the quote rows, confirming that quoting did not record a transaction.
 
-The current implementation uses a semantic catalog-matching pass with strict programmatic coverage and unit checks to balance these outcomes. A fresh full evaluation against `quote_requests_sample.csv` is still required before claiming the rubric's result. The latest `test_results.csv` and `output.txt` were not present in the workspace when this report was written, so no current-run counts are asserted here.
+Of the 20 purchase scenarios, four ended with `final_status=fulfilled` and 16 with `final_status=no_order_record`; every no-order result includes a reason. The evaluation therefore did not fulfill every purchase request, and the CSV records the reasons. The cash balance changes across four transitions in the purchase results, exceeding the rubric's minimum of three requests that change the balance. No purchase request remained pending at the end of this run. The CSV is the current evaluation evidence; a console log from the same run is not present in the workspace.
 
-Known limitations include the LLM's semantic match judgment, intentionally conservative handling of color/size/material claims not represented in the catalog, and supplier delivery being an estimate rather than a confirmed external order. The model should not be allowed to weaken the deterministic checks for match coverage, canonical catalog names, units, cash, deadlines, or database writes.
+Known limitations include the LLM's semantic catalog-matching judgment, intentionally conservative handling of color/size/material claims not represented in the catalog, and supplier delivery being an estimate rather than a confirmed external order. The successful quote tests cover three canonical products, not every wording or product combination. The model should not be allowed to weaken the deterministic checks for match coverage, canonical catalog names, units, cash, deadlines, or database writes.
 
 ## Strengths
 
 - Structured Pydantic requests keep intent, quantities, units, dates, and order IDs explicit.
 - Pricing, stock, delivery, and cash calculations are implemented in deterministic tools rather than delegated to free-form model arithmetic.
+- In the recorded run, all three standalone quote cases returned the expected catalog item and total, including the 0%, 5%, and 10% discount tiers; quote rows recorded no sale and did not change cash or inventory.
+- The purchase evaluation recorded four sales and left 16 requests without an order, with a reason for each. This shows that the system can complete eligible requests while explaining why others were not recorded.
 - Pending orders reserve resources, process supplier receipts by simulated date, and can be retried by stable order ID.
 - Transactional writes prevent a partially recorded multi-line sale when a database operation fails.
 - The design stays within the five-agent limit and includes the required inventory, cash, and financial-report helpers.
@@ -54,7 +59,7 @@ Known limitations include the LLM's semantic match judgment, intentionally conse
 
 1. **Improve catalog data and matching tests.** Add reviewed aliases and supported attributes to the canonical catalog, then test every scenario's original line against its proposed match. Keep ambiguous product properties and unsupported goods as clarification or rejection results.
 2. **Strengthen concurrent reservation safety.** The current assessment-then-write sequence is safe for the sequential simulator but can race if simultaneous requests inspect the same stock or cash. Perform availability checks and reservation writes under a serialized database transaction, and add a concurrent-request test.
-3. **Persist evaluation evidence.** Export original request, structured extraction, catalog matches, initial response, final status, and final reason. Preserve the console log and CSV from the same run so the report can be reproduced.
+3. **Preserve complete evaluation evidence.** Keep the console log with the CSV from the same run and record the run date or code revision, so model outputs and status counts can be reproduced and traced.
 4. **Persist accepted pricing.** Store the accepted quote with each pending order so later catalog or discount-policy changes cannot alter the sale amount at fulfillment.
 
 ## Running and submitting
