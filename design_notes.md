@@ -21,7 +21,25 @@ The implementation is split into the `munder_difflin` package by responsibility.
 
 `process_pending_orders(as_of_date)` runs from the scenario harness before each customer request. It records due supplier receipts, then records the sale and releases reservations when all lines are available. Replenishment receipts, sales, reservation updates, and order-result changes use a database transaction.
 
-The architecture diagram is [`diagrams/diagram.png`](diagrams/diagram.png), with editable sources in [`diagrams/diagram.drawio`](diagrams/diagram.drawio) and [`diagrams/diagram.svg`](diagrams/diagram.svg). [`diagrams/workflow.png`](diagrams/workflow.png) is the earlier workflow sketch.
+## Agent tool and helper traceability
+
+The diagram uses **direct helper** for functions called by a tool and **nested helper** for a function called by one of those helpers. Database functions that are themselves registered agent tools are identified as direct database tools; they execute their SQL query internally rather than calling another starter helper.
+
+| Agent / tool | Purpose and data flow | Starter helper functions used |
+|---|---|---|
+| Inventory — `assess_inventory(str, int, str, str) -> InventoryAssessment` | Inputs: item, quantity, request date, due date. Output: current/shortfall stock, estimated supplier date, deadline flag. | Direct: `get_stock_level`, `get_reserved_stock`. If stock is short: `get_supplier_delivery_date`. |
+| Inventory — `list_available_inventory(str) -> Dict[str, int]` | Input: as-of date. Output: positive available quantity by product. | Direct: `get_all_inventory`, `get_reserved_stock` (once per inventory item). |
+| Sales — `assess_order(List[QuoteItemRequest], str, str) -> OrderAssessment` | Inputs: items and dates. Output: feasibility, reason, replenishment cost, cash balance. | Direct: `consolidate_items`, `assess_inventory`, `get_cash_balance`, `get_reserved_cash`. Through `assess_inventory`: `get_stock_level`, `get_reserved_stock`, and, when needed, `get_supplier_delivery_date`. Reads `paper_supplies` to price replenishment at acquisition cost. |
+| Sales — `fulfill_order(str, List[QuoteItemRequest], str, str) -> OrderResult` | Inputs: order ID, items, request date, due date. Output: fulfilled, pending, or rejected status and reason. | Direct: `consolidate_items`, `assess_order`, `assess_inventory`; for an immediately fulfillable order, `calculate_quote` and `create_transaction`. `assess_order` and `assess_inventory` use their helpers listed above. Order and reservation records are also written with SQL inside a transaction. |
+| Quotes — `calculate_quote(List[QuoteItemRequest]) -> QuoteAssessment` | Input: canonical quote lines. Output: itemized prices, discounts, and total. | Direct: `consolidate_items`, `get_bulk_discount`. Reads `paper_supplies` and `MARKUP_RATE`; these are catalog/policy data, not helper functions. |
+| Quotes — `search_quote_history(List[str], int) -> List[Dict]` | Inputs: search terms and result limit. Output: matching prior quote records. | `search_quote_history` is itself the registered starter database helper; it executes its SQL query directly and calls no other starter helper. |
+| Reporting — `get_all_inventory(str) -> Dict[str, int]` | Input: as-of date. Output: stock snapshot. | `get_all_inventory` is itself the registered starter database helper and runs its SQL query directly. |
+| Reporting — `get_cash_balance(Union[str, datetime]) -> float` | Input: as-of date. Output: cash balance. | `get_cash_balance` is itself the registered starter database helper and runs its query/calculation directly. |
+| Reporting — `generate_financial_report(Union[str, datetime]) -> Dict` | Input: as-of date. Output: cash, inventory value, assets, inventory detail, and top sellers. | Direct calls: `get_cash_balance`, `get_stock_level`. It also queries the inventory table and sales transactions directly. |
+
+`process_pending_orders(as_of_date)` is called by the scenario harness, not registered as an agent tool. It uses `calculate_quote` and `create_transaction`, and updates order/reservation rows with SQL as supplier arrivals become due.
+
+The detailed architecture diagram is [`diagrams/diagram.svg`](diagrams/diagram.svg), with its editable source in [`diagrams/diagram.drawio`](diagrams/diagram.drawio). [`diagrams/workflow.png`](diagrams/workflow.png) combines the order-lifecycle flow with agent/tool/helper traceability; its vector source is [`diagrams/workflow.svg`](diagrams/workflow.svg), which uses [`diagrams/workflow_lifecycle_source.png`](diagrams/workflow_lifecycle_source.png) for the original lifecycle artwork.
 
 ## Data and business rules
 

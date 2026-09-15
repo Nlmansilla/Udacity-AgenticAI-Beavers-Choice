@@ -89,77 +89,84 @@
 
   <!-- Inventory worker -->
   <rect x="1145" y="115" width="1100" height="310" rx="16" class="worker"/>
-  <path d="M1161 115 H2229 Q2245 115 2245 131 V169 H1145 V131 Q1145 115 1161 115" class="inventory-head"/>
+  <path d="M1161 115 H2229 Q2245 115 2245 131 V169 H1145 V131 Q1145 115 1161 115" fill="#ffffff"/>
   <text x="1172" y="151" class="agent-title">Inventory Agent</text>
   <text x="1515" y="149" class="small">Checks available stock, shortage, and estimated supplier timing</text>
-  <rect x="1170" y="190" width="515" height="112" rx="10" class="tool"/>
+  <rect x="1170" y="190" width="515" height="124" rx="10" class="tool"/>
   <text x="1188" y="218" class="section">Tool: assess_inventory(...)</text>
-  <text x="1188" y="244" class="small">Helpers: get_stock_level • get_reserved_stock</text>
-  <text x="1188" y="267" class="small">get_supplier_delivery_date (estimate only)</text>
-  <text x="1188" y="289" class="small">Returns: current_stock, missing_quantity, supplier date, deadline flag</text>
+  <text x="1188" y="240" class="small">Input: str, int, str, str</text>
+  <text x="1188" y="262" class="small">Direct helpers: get_stock_level • get_reserved_stock</text>
+  <text x="1188" y="284" class="small">If short: get_supplier_delivery_date (estimate only)</text>
+  <text x="1188" y="306" class="small">Output: InventoryAssessment (stock, shortage, date, deadline flag)</text>
   <rect x="1705" y="190" width="515" height="112" rx="10" class="tool"/>
   <text x="1723" y="218" class="section">Tool: list_available_inventory(as_of_date)</text>
-  <text x="1723" y="244" class="small">Helpers: get_all_inventory • get_reserved_stock</text>
-  <text x="1723" y="267" class="small">Returns positive available quantities after reservations</text>
-  <rect x="1170" y="321" width="1050" height="72" rx="10" class="helper"/>
-  <text x="1188" y="350" class="small">Decision: stock meets quantity → available now; shortage → compare estimated arrival with requested deadline.</text>
-  <text x="1188" y="374" class="small">A supplier date is an estimate; this agent does not place replenishment orders or record sales.</text>
+  <text x="1723" y="242" class="small">Input: str (as_of_date)</text>
+  <text x="1723" y="266" class="small">Helpers: get_all_inventory • get_reserved_stock per item</text>
+  <text x="1723" y="289" class="small">Output: Dict[str, int] of available quantities</text>
+  <rect x="1170" y="333" width="1050" height="60" rx="10" class="helper"/>
+  <text x="1188" y="358" class="small">Decision: stock meets quantity → available now; shortage → compare estimated arrival with requested deadline.</text>
+  <text x="1188" y="381" class="small">A supplier date is an estimate; this agent does not place replenishment orders or record sales.</text>
 
   <!-- Sales worker -->
   <rect x="1145" y="495" width="1100" height="365" rx="16" class="worker"/>
-  <path d="M1161 495 H2229 Q2245 495 2245 511 V549 H1145 V511 Q1145 495 1161 495" class="sales-head"/>
+  <path d="M1161 495 H2229 Q2245 495 2245 511 V549 H1145 V511 Q1145 495 1161 495" fill="#ffffff"/>
   <text x="1172" y="531" class="agent-title">Sales Agent</text>
   <text x="1515" y="529" class="small">Evaluates and finalizes an explicitly authorized purchase</text>
-  <rect x="1170" y="570" width="515" height="116" rx="10" class="tool"/>
+  <rect x="1170" y="570" width="515" height="136" rx="10" class="tool"/>
   <text x="1188" y="598" class="section">Tool: assess_order(...)</text>
-  <text x="1188" y="624" class="small">Helpers: assess_inventory • get_cash_balance</text>
-  <text x="1188" y="647" class="small">get_reserved_cash • get_reserved_stock</text>
-  <text x="1188" y="671" class="small">Checks deadline feasibility and replenishment funds</text>
-  <rect x="1705" y="570" width="515" height="116" rx="10" class="tool"/>
+  <text x="1188" y="620" class="small">Input → Output: List[QuoteItemRequest], str, str → OrderAssessment</text>
+  <text x="1188" y="642" class="small">Direct: consolidate_items • assess_inventory</text>
+  <text x="1188" y="664" class="small">Direct: get_cash_balance • get_reserved_cash</text>
+  <text x="1188" y="686" class="small">Via assess_inventory: get_stock_level • get_reserved_stock • get_supplier_delivery_date*</text>
+  <rect x="1705" y="570" width="515" height="136" rx="10" class="tool"/>
   <text x="1723" y="598" class="section">Tool: fulfill_order(...)</text>
-  <text x="1723" y="624" class="small">Helpers: assess_order • assess_inventory • calculate_quote</text>
-  <text x="1723" y="647" class="small">create_transaction • transactional order/reservation writes</text>
-  <text x="1723" y="671" class="small">Requires order ID, item lines, request date, due date</text>
-  <rect x="1170" y="705" width="1050" height="123" rx="10" class="helper"/>
-  <text x="1188" y="733" class="section">Possible results</text>
-  <text x="1188" y="759" class="small">fulfilled — sale recorded from available stock • pending — stock and funds reserved for replenishment</text>
-  <text x="1188" y="783" class="small">rejected — deadline or funding rule failed. No transaction is recorded.</text>
-  <text x="1188" y="810" class="small">Scenario harness: process_pending_orders(as_of_date) receives due stock and completes eligible pending orders.</text>
-  <text x="1188" y="833" class="small">Note: OrderResult declares requires_replenishment, but the current fulfillment path returns fulfilled, pending, or rejected.</text>
+  <text x="1723" y="620" class="small">Input → Output: str, List[QuoteItemRequest], str, str → OrderResult</text>
+  <text x="1723" y="642" class="small">Direct: consolidate_items • assess_order • assess_inventory</text>
+  <text x="1723" y="664" class="small">Conditional: calculate_quote • create_transaction</text>
+  <text x="1723" y="686" class="small">Order/reservation records: SQL transaction</text>
+  <rect x="1170" y="716" width="1050" height="132" rx="10" class="helper"/>
+  <text x="1188" y="741" class="section">Results and scheduled helper</text>
+  <text x="1188" y="765" class="small">fulfilled — sale recorded • pending — stock/funds reserved • rejected — deadline or funding failure</text>
+  <text x="1188" y="788" class="small">Nested chain: assess_order → assess_inventory → get_stock_level, get_reserved_stock, and conditional supplier estimate.</text>
+  <text x="1188" y="811" class="small">Scenario harness (not an agent tool): process_pending_orders → calculate_quote, create_transaction, SQL updates.</text>
+  <text x="1188" y="834" class="small">* Supplier timing is estimated. The current fulfillment path returns fulfilled, pending, or rejected.</text>
 
   <!-- Quotes worker -->
   <rect x="1145" y="875" width="1100" height="265" rx="16" class="worker"/>
-  <path d="M1161 875 H2229 Q2245 875 2245 891 V929 H1145 V891 Q1145 875 1161 875" class="quote-head"/>
+  <path d="M1161 875 H2229 Q2245 875 2245 891 V929 H1145 V891 Q1145 875 1161 875" fill="#ffffff"/>
   <text x="1172" y="911" class="agent-title">Quotes Agent</text>
   <text x="1515" y="909" class="small">Provides deterministic item pricing and relevant historical context</text>
-  <rect x="1170" y="950" width="515" height="112" rx="10" class="tool"/>
+  <rect x="1170" y="950" width="515" height="124" rx="10" class="tool"/>
   <text x="1188" y="978" class="section">Tool: calculate_quote(items)</text>
-  <text x="1188" y="1004" class="small">Helper: get_bulk_discount</text>
-  <text x="1188" y="1027" class="small">Uses catalog unit_price × 1.25, then quantity discount</text>
-  <text x="1188" y="1050" class="small">Returns line prices, discount rates, and total</text>
+  <text x="1188" y="1000" class="small">Input → Output: List[QuoteItemRequest] → QuoteAssessment</text>
+  <text x="1188" y="1022" class="small">Helpers: consolidate_items • get_bulk_discount</text>
+  <text x="1188" y="1044" class="small">Reads paper_supplies and MARKUP_RATE (×1.25)</text>
+  <text x="1188" y="1066" class="small">Returns line prices, discounts, and total</text>
   <rect x="1705" y="950" width="515" height="112" rx="10" class="tool"/>
   <text x="1723" y="978" class="section">Tool: search_quote_history(...)</text>
-  <text x="1723" y="1004" class="small">Looks up historical quote records for context</text>
-  <text x="1723" y="1027" class="small">Historical prices do not override current pricing rules</text>
-  <text x="1723" y="1050" class="small">Output: relevant past requests and explanations</text>
+  <text x="1723" y="1002" class="small">Input → Output: List[str], int → List[Dict]</text>
+  <text x="1723" y="1026" class="small">This is itself the starter database helper; runs SQL directly</text>
+  <text x="1723" y="1050" class="small">Historical prices do not override current pricing rules</text>
   <text x="1170" y="1097" class="small">A quote reports price and discount; it does not confirm stock, delivery, or authorize a purchase.</text>
 
   <!-- Reporting worker -->
-  <rect x="1145" y="1255" width="1100" height="265" rx="16" class="worker"/>
-  <path d="M1161 1255 H2229 Q2245 1255 2245 1271 V1309 H1145 V1271 Q1145 1255 1161 1255" class="report-head"/>
+  <rect x="1145" y="1255" width="1100" height="295" rx="16" class="worker"/>
+  <path d="M1161 1255 H2229 Q2245 1255 2245 1271 V1309 H1145 V1271 Q1145 1255 1161 1255" fill="#ffffff"/>
   <text x="1172" y="1291" class="agent-title">Reporting Agent</text>
   <text x="1515" y="1289" class="small">Answers inventory, cash, and overall financial position questions</text>
-  <rect x="1170" y="1330" width="1050" height="112" rx="10" class="tool"/>
+  <rect x="1170" y="1330" width="1050" height="176" rx="10" class="tool"/>
   <text x="1188" y="1358" class="section">Registered tools and helpers</text>
-  <text x="1188" y="1384" class="mono">get_all_inventory(as_of_date) → stock snapshot</text>
-  <text x="1188" y="1407" class="mono">get_cash_balance(as_of_date) → cash balance</text>
-  <text x="1188" y="1430" class="mono">generate_financial_report(as_of_date) → cash, inventory, and financial summary</text>
-  <text x="1170" y="1480" class="small">Read-only: reports tool results and never records purchases or sales.</text>
+  <text x="1188" y="1384" class="mono">get_all_inventory(str) → Dict[str, int]; itself a DB helper, SQL query</text>
+  <text x="1188" y="1407" class="mono">get_cash_balance(Union[str, datetime]) → float; DB helper, query/calculation</text>
+  <text x="1188" y="1430" class="mono">generate_financial_report(Union[str, datetime]) → Dict</text>
+  <text x="1188" y="1453" class="small">Report helper calls: get_cash_balance and get_stock_level; also queries inventory/sales tables.</text>
+  <text x="1188" y="1476" class="small">These registered starter helpers execute their database queries directly; no extra tool layer.</text>
+  <text x="1170" y="1530" class="small">Read-only: reports tool results and never records purchases or sales.</text>
 
   <!-- Footer and legend -->
   <line x1="55" y1="1580" x2="2245" y2="1580" stroke="#e2e8f0" stroke-width="2"/>
   <path d="M80 1625 H190" class="flow"/><text x="205" y="1631" class="small">Request / delegated input</text>
   <path d="M450 1625 H560" class="return"/><text x="575" y="1631" class="small">Tool result / customer response</text>
   <text x="55" y="1690" class="small">Solid arrows show requests sent by the orchestrator; dashed blue arrows show specialist results returning for the customer response.</text>
-  <text x="55" y="1720" class="small">The orchestrator dispatches only after item coverage and sales units are validated. Pending-order processing is simulated by the scenario harness.</text>
+  <text x="55" y="1720" class="small">The orchestrator dispatches only after item coverage and sales units are validated. Tool cards name direct helpers; nested helper calls are marked explicitly.</text>
 </svg>
