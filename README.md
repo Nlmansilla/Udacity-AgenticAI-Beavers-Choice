@@ -4,7 +4,14 @@ A text-based multi-agent workflow for paper inventory, quoting, purchase evaluat
 
 ## Project files
 
-- `project_starter.py` — agents, tools, database helpers, and scenario runner.
+- `project_starter.py` — backward-compatible entry point and exports for the original starter API.
+- `munder_difflin/` — modular application package:
+  - `database_setup.py` creates and seeds the exercise database; `database.py` contains database access and transaction helpers.
+  - `schemas.py` defines shared Pydantic input and result models; `catalog.py` holds catalog and pricing constants.
+  - `tools/` contains inventory, quoting, and sales tools.
+  - `agents/` contains one factory module per agent and the shared `AgentSystem` builder.
+  - `catalog_matching.py` validates semantic product matches; `dispatch.py` routes requests.
+  - `evaluation.py` runs the supplied scenarios; `cli.py` configures the runtime and starts the evaluation.
 - `quote_requests_sample.csv` — evaluation scenarios.
 - `quotes.csv` and `quote_requests.csv` — historical quote data.
 - `diagrams/` — architecture and order-lifecycle diagrams.
@@ -12,11 +19,13 @@ A text-based multi-agent workflow for paper inventory, quoting, purchase evaluat
 
 ## Setup and execution
 
-Install dependencies with `pip install -r requirements.txt`. Configure the Vocareum-compatible API credentials and model settings in `.env` using the variable names expected by `project_starter.py`. Run the script from this directory:
+Install dependencies with `uv sync` (or `pip install -r requirements.txt`). Configure the Vocareum-compatible API credentials and model settings in `.env` using `UDACITY_OPENAI_API_KEY` and `UDACITY_MODEL_NAME`. Run the script from this directory:
 
 ```bash
 python project_starter.py
 ```
+
+The package entry point is also available as `uv run python -m munder_difflin`.
 
 The evaluation calls the model, initializes the SQLite database, simulates the dated scenarios, and writes `test_results.csv`. Keep the generated CSV and console output together as evidence from the same run.
 

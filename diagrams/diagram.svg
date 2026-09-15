@@ -1,0 +1,165 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2300" height="1780" viewBox="0 0 2300 1780" role="img" aria-labelledby="title desc">
+  <title id="title">Munder Difflin Multi-Agent System</title>
+  <desc id="desc">Architecture diagram showing customer request interpretation, catalog validation, dispatch to four specialist agents, each agent's tools and helper functions, and response flow back to the customer.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#111111"/></marker>
+    <marker id="arrowBlue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#111111"/></marker>
+    <style>
+      text { font-family: Inter, Arial, sans-serif; fill: #172033; }
+      .title { font-size: 36px; font-weight: 700; }
+      .subtitle { font-size: 18px; fill: #333333; }
+      .agent-title { font-size: 22px; font-weight: 700; }
+      .section { font-size: 16px; font-weight: 700; fill: #334155; }
+      .body { font-size: 15px; }
+      .small { font-size: 13px; fill: #333333; }
+      .mono { font-family: 'DejaVu Sans Mono', monospace; font-size: 13px; fill: #102a43; }
+      .customer { fill: #ffffff; stroke: #111111; stroke-width: 1.5; }
+      .orchestrator { fill: #ffffff; stroke: #111111; stroke-width: 1.5; }
+      .dispatcher { fill: #ffffff; stroke: #111111; stroke-width: 1.5; }
+      .worker { fill: #ffffff; stroke: #111111; stroke-width: 1.5; }
+      .inventory-head, .sales-head, .quote-head, .report-head { fill: #ffffff; }
+      .tool { fill: #ffffff; stroke: #0085ff; stroke-width: 1.5; }
+      .helper { fill: #ffffff; stroke: #111111; stroke-width: 1.1; }
+      .flow { fill: none; stroke: #111111; stroke-width: 1.8; marker-end: url(#arrow); }
+      .return { fill: none; stroke: #111111; stroke-width: 1.8; stroke-dasharray: 8 6; marker-end: url(#arrowBlue); }
+      .internal { fill: none; stroke: #111111; stroke-width: 1.4; marker-end: url(#arrow); }
+      .trunk { fill: none; stroke: #111111; stroke-width: 1.4; }
+      .label { font-size: 13px; font-weight: 600; fill: #111111; }
+      .badge { fill: #ffffff; stroke: #111111; stroke-width: 1; }
+    </style>
+  </defs>
+  <rect width="2300" height="1780" fill="#ffffff"/>
+  <text x="55" y="62" class="title">Munder Difflin Multi-Agent System</text>
+  <text x="55" y="94" class="subtitle">Request flow, agent responsibilities, tools, helper functions, and returned results</text>
+
+  <!-- Customer and orchestration -->
+  <rect x="45" y="620" width="150" height="150" rx="18" class="customer"/>
+  <text x="120" y="672" text-anchor="middle" class="agent-title">Customer</text>
+  <text x="120" y="704" text-anchor="middle" class="small">Natural-language</text>
+  <text x="120" y="725" text-anchor="middle" class="small">request</text>
+
+  <rect x="250" y="410" width="505" height="570" rx="18" class="orchestrator"/>
+  <text x="278" y="450" class="agent-title">Orchestrator Agent</text>
+  <text x="278" y="479" class="small">Pydantic AI • interprets intent and coordinates workers</text>
+  <rect x="278" y="504" width="449" height="104" rx="10" fill="#ffffff" stroke="#c7d2fe"/>
+  <text x="296" y="532" class="section">1. Parse request</text>
+  <text x="296" y="558" class="body">Input: customer message + reference date</text>
+  <text x="296" y="582" class="mono">Output: ParsedCustomerRequest</text>
+  <rect x="278" y="625" width="449" height="124" rx="10" fill="#ffffff" stroke="#c7d2fe"/>
+  <text x="296" y="653" class="section">2. Resolve and validate every requested item</text>
+  <text x="296" y="679" class="mono">resolve_catalog_items → CatalogMatch[]</text>
+  <text x="296" y="703" class="mono">validate_match_coverage • units_match</text>
+  <text x="296" y="727" class="mono">build_order_items (no omitted or converted lines)</text>
+  <rect x="278" y="766" width="449" height="88" rx="10" fill="#ffffff" stroke="#c7d2fe"/>
+  <text x="296" y="794" class="section">3. Route by intent</text>
+  <text x="296" y="820" class="mono">dispatch_request(request, matches)</text>
+  <text x="296" y="842" class="small">Catalog ambiguity or unsupported items → clarification; no action.</text>
+  <rect x="278" y="873" width="449" height="78" rx="10" class="badge"/>
+  <text x="296" y="901" class="section">Customer response</text>
+  <text x="296" y="927" class="small">Specialist result / clarification is returned to the customer.</text>
+
+  <rect x="820" y="650" width="230" height="180" rx="16" class="dispatcher"/>
+  <text x="935" y="690" text-anchor="middle" class="agent-title">Intent Router</text>
+  <text x="935" y="721" text-anchor="middle" class="mono">dispatch_request</text>
+  <text x="935" y="753" text-anchor="middle" class="small">inventory • quote</text>
+  <text x="935" y="775" text-anchor="middle" class="small">purchase • report</text>
+  <text x="935" y="807" text-anchor="middle" class="small">Worker result → customer</text>
+
+  <path d="M195 695 H250" class="flow"/>
+  <text x="202" y="680" class="label">Request</text>
+  <path d="M755 810 H820" class="flow"/>
+  <text x="765" y="795" class="label">Input</text>
+  <path d="M820 677 H780 V925 H755" class="return"/>
+  <text x="764" y="948" class="label">Clarification / result</text>
+  <path d="M278 913 H220 V790 H120 V770" class="return"/>
+
+  <!-- Routing and response trunks -->
+  <path d="M1050 740 H1095" class="internal"/>
+  <path d="M1095 247 V1387" class="trunk"/>
+  <path d="M1095 247 H1145" class="flow"/>
+  <path d="M1095 627 H1145" class="flow"/>
+  <path d="M1095 1007 H1145" class="flow"/>
+  <path d="M1095 1387 H1145" class="flow"/>
+  <path d="M1145 292 H1115 V840 H1050" class="return"/>
+  <path d="M1145 672 H1115 V840 H1050" class="return"/>
+  <path d="M1145 1052 H1115 V840 H1050" class="return"/>
+  <path d="M1145 1432 H1115 V840 H1050" class="return"/>
+  <text x="1065" y="194" class="label">Dispatched input</text>
+  <text x="1057" y="872" class="label" fill="#2563eb">Worker output</text>
+
+  <!-- Inventory worker -->
+  <rect x="1145" y="115" width="1100" height="310" rx="16" class="worker"/>
+  <path d="M1161 115 H2229 Q2245 115 2245 131 V169 H1145 V131 Q1145 115 1161 115" class="inventory-head"/>
+  <text x="1172" y="151" class="agent-title">Inventory Agent</text>
+  <text x="1515" y="149" class="small">Checks available stock, shortage, and estimated supplier timing</text>
+  <rect x="1170" y="190" width="515" height="112" rx="10" class="tool"/>
+  <text x="1188" y="218" class="section">Tool: assess_inventory(...)</text>
+  <text x="1188" y="244" class="small">Helpers: get_stock_level • get_reserved_stock</text>
+  <text x="1188" y="267" class="small">get_supplier_delivery_date (estimate only)</text>
+  <text x="1188" y="289" class="small">Returns: current_stock, missing_quantity, supplier date, deadline flag</text>
+  <rect x="1705" y="190" width="515" height="112" rx="10" class="tool"/>
+  <text x="1723" y="218" class="section">Tool: list_available_inventory(as_of_date)</text>
+  <text x="1723" y="244" class="small">Helpers: get_all_inventory • get_reserved_stock</text>
+  <text x="1723" y="267" class="small">Returns positive available quantities after reservations</text>
+  <rect x="1170" y="321" width="1050" height="72" rx="10" class="helper"/>
+  <text x="1188" y="350" class="small">Decision: stock meets quantity → available now; shortage → compare estimated arrival with requested deadline.</text>
+  <text x="1188" y="374" class="small">A supplier date is an estimate; this agent does not place replenishment orders or record sales.</text>
+
+  <!-- Sales worker -->
+  <rect x="1145" y="495" width="1100" height="365" rx="16" class="worker"/>
+  <path d="M1161 495 H2229 Q2245 495 2245 511 V549 H1145 V511 Q1145 495 1161 495" class="sales-head"/>
+  <text x="1172" y="531" class="agent-title">Sales Agent</text>
+  <text x="1515" y="529" class="small">Evaluates and finalizes an explicitly authorized purchase</text>
+  <rect x="1170" y="570" width="515" height="116" rx="10" class="tool"/>
+  <text x="1188" y="598" class="section">Tool: assess_order(...)</text>
+  <text x="1188" y="624" class="small">Helpers: assess_inventory • get_cash_balance</text>
+  <text x="1188" y="647" class="small">get_reserved_cash • get_reserved_stock</text>
+  <text x="1188" y="671" class="small">Checks deadline feasibility and replenishment funds</text>
+  <rect x="1705" y="570" width="515" height="116" rx="10" class="tool"/>
+  <text x="1723" y="598" class="section">Tool: fulfill_order(...)</text>
+  <text x="1723" y="624" class="small">Helpers: assess_order • assess_inventory • calculate_quote</text>
+  <text x="1723" y="647" class="small">create_transaction • transactional order/reservation writes</text>
+  <text x="1723" y="671" class="small">Requires order ID, item lines, request date, due date</text>
+  <rect x="1170" y="705" width="1050" height="123" rx="10" class="helper"/>
+  <text x="1188" y="733" class="section">Possible results</text>
+  <text x="1188" y="759" class="small">fulfilled — sale recorded from available stock • pending — stock and funds reserved for replenishment</text>
+  <text x="1188" y="783" class="small">rejected — deadline or funding rule failed. No transaction is recorded.</text>
+  <text x="1188" y="810" class="small">Scenario harness: process_pending_orders(as_of_date) receives due stock and completes eligible pending orders.</text>
+  <text x="1188" y="833" class="small">Note: OrderResult declares requires_replenishment, but the current fulfillment path returns fulfilled, pending, or rejected.</text>
+
+  <!-- Quotes worker -->
+  <rect x="1145" y="875" width="1100" height="265" rx="16" class="worker"/>
+  <path d="M1161 875 H2229 Q2245 875 2245 891 V929 H1145 V891 Q1145 875 1161 875" class="quote-head"/>
+  <text x="1172" y="911" class="agent-title">Quotes Agent</text>
+  <text x="1515" y="909" class="small">Provides deterministic item pricing and relevant historical context</text>
+  <rect x="1170" y="950" width="515" height="112" rx="10" class="tool"/>
+  <text x="1188" y="978" class="section">Tool: calculate_quote(items)</text>
+  <text x="1188" y="1004" class="small">Helper: get_bulk_discount</text>
+  <text x="1188" y="1027" class="small">Uses catalog unit_price × 1.25, then quantity discount</text>
+  <text x="1188" y="1050" class="small">Returns line prices, discount rates, and total</text>
+  <rect x="1705" y="950" width="515" height="112" rx="10" class="tool"/>
+  <text x="1723" y="978" class="section">Tool: search_quote_history(...)</text>
+  <text x="1723" y="1004" class="small">Looks up historical quote records for context</text>
+  <text x="1723" y="1027" class="small">Historical prices do not override current pricing rules</text>
+  <text x="1723" y="1050" class="small">Output: relevant past requests and explanations</text>
+  <text x="1170" y="1097" class="small">A quote reports price and discount; it does not confirm stock, delivery, or authorize a purchase.</text>
+
+  <!-- Reporting worker -->
+  <rect x="1145" y="1255" width="1100" height="265" rx="16" class="worker"/>
+  <path d="M1161 1255 H2229 Q2245 1255 2245 1271 V1309 H1145 V1271 Q1145 1255 1161 1255" class="report-head"/>
+  <text x="1172" y="1291" class="agent-title">Reporting Agent</text>
+  <text x="1515" y="1289" class="small">Answers inventory, cash, and overall financial position questions</text>
+  <rect x="1170" y="1330" width="1050" height="112" rx="10" class="tool"/>
+  <text x="1188" y="1358" class="section">Registered tools and helpers</text>
+  <text x="1188" y="1384" class="mono">get_all_inventory(as_of_date) → stock snapshot</text>
+  <text x="1188" y="1407" class="mono">get_cash_balance(as_of_date) → cash balance</text>
+  <text x="1188" y="1430" class="mono">generate_financial_report(as_of_date) → cash, inventory, and financial summary</text>
+  <text x="1170" y="1480" class="small">Read-only: reports tool results and never records purchases or sales.</text>
+
+  <!-- Footer and legend -->
+  <line x1="55" y1="1580" x2="2245" y2="1580" stroke="#e2e8f0" stroke-width="2"/>
+  <path d="M80 1625 H190" class="flow"/><text x="205" y="1631" class="small">Request / delegated input</text>
+  <path d="M450 1625 H560" class="return"/><text x="575" y="1631" class="small">Tool result / customer response</text>
+  <text x="55" y="1690" class="small">Solid arrows show requests sent by the orchestrator; dashed blue arrows show specialist results returning for the customer response.</text>
+  <text x="55" y="1720" class="small">The orchestrator dispatches only after item coverage and sales units are validated. Pending-order processing is simulated by the scenario harness.</text>
+</svg>

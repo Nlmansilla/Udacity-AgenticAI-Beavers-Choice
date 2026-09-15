@@ -15,6 +15,10 @@ The specialist agents are:
 - **Sales Agent:** evaluates deadlines, inventory, reservations, and cash before calling `fulfill_order`. The tool records direct sales atomically, supports order IDs for idempotent retries, or creates a pending order with stock and cash reservations when replenishment is required.
 - **Reporting Agent:** answers cash, inventory, and financial-report questions using the starter helper functions.
 
+## Code organization
+
+The implementation is split into the `munder_difflin` package by responsibility. `database_setup.py` creates and seeds the exercise schema, while `database.py` owns database queries and transaction helpers. Shared Pydantic contracts live in `schemas.py`; inventory, quote, and sales tools live in separate modules under `tools/`. Each agent has a factory in `agents/`, and `agents.build_agent_system` creates the five agents around one model configuration. Catalog resolution and request routing are in `catalog_matching.py` and `dispatch.py`; the scenario runner is isolated in `evaluation.py`. `project_starter.py` remains a small compatibility entry point for the original assignment interface. The setup script recreates the exercise tables and seed data on each evaluation run; a versioned migration framework is unnecessary for this fixed, local exercise schema.
+
 `process_pending_orders(as_of_date)` runs from the scenario harness before each customer request. It records due supplier receipts, then records the sale and releases reservations when all lines are available. Replenishment receipts, sales, reservation updates, and order-result changes use a database transaction.
 
 The architecture diagram is [`diagrams/diagram.png`](diagrams/diagram.png), with editable sources in [`diagrams/diagram.drawio`](diagrams/diagram.drawio) and [`diagrams/diagram.svg`](diagrams/diagram.svg). [`diagrams/workflow.png`](diagrams/workflow.png) is the earlier workflow sketch.
